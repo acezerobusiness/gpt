@@ -1,32 +1,30 @@
 name: Persistent AI Worker
 
 on:
-  workflow_dispatch:   # manual start only
+  workflow_dispatch:
 
 jobs:
   run-ai:
     runs-on: ubuntu-latest
-    timeout-minutes: 360   # ⏱️ ~6 hours max
+    timeout-minutes: 360
 
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: ⚡ Cache model
+      - name: Cache model
         uses: actions/cache@v3
         with:
           path: ~/.cache/huggingface
           key: hf-cache-v2
 
-      - name: 📦 Install deps
+      - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: 🚀 Start Worker
+      - name: Run worker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
