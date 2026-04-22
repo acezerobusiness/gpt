@@ -1,10 +1,10 @@
-name: Persistent AI Worker
+name: Worker
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-ai:
+  host-ai:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
