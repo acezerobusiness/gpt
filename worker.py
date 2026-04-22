@@ -99,10 +99,12 @@ while True:
             print("⏭️ Skipping (already processed)")
             continue
 
-        prompt = issue.get("body", "")
+        prompt = issue.get("body") or ""
 
         if not prompt.strip():
-            print("⚠️ Empty prompt, skipping")
+            print("⚠️ Empty or None prompt, skipping")
+
+            comment(issue, "⚠️ Empty prompt. Please provide input.")
             mark_done(issue)
             continue
 
