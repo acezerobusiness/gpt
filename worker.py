@@ -1,7 +1,11 @@
 import os
 import time
 import requests
+import sys
 from transformers import AutoTokenizer, AutoModelForCausalLM
+
+# 🔥 Force real-time logs (fixes "stuck" issue)
+sys.stdout.reconfigure(line_buffering=True)
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["REPO"]
@@ -30,9 +34,7 @@ def generate(prompt):
     outputs = model.generate(
         **inputs,
         max_new_tokens=80,
-        temperature=0.7,
-        top_p=0.9,
-        max_length=None  # 🔥 removes warning
+        max_length=None  # removes warning
     )
 
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -43,8 +45,10 @@ def get_issues():
     url = f"https://api.github.com/repos/{REPO}/issues"
     r = requests.get(url, headers=HEADERS)
 
+    print(f"🌐 GitHub API status: {r.status_code}")
+
     if r.status_code != 200:
-        print("❌ GitHub API error:", r.text)
+        print("❌ API error:", r.text)
         return []
 
     return r.json()
@@ -61,7 +65,7 @@ def comment(issue, text):
     )
 
 
-# 🏷️ Mark issue as done (IMPORTANT)
+# 🏷️ Mark issue as done
 def mark_done(issue):
     print(f"🏷️ Marking #{issue['number']} as done")
 
@@ -74,7 +78,7 @@ def mark_done(issue):
     )
 
 
-# 🔍 Check if already processed
+# 🔍 Check if processed
 def is_processed(issue):
     labels = [l["name"] for l in issue.get("labels", [])]
     print(f"🔎 Issue #{issue['number']} labels:", labels)
@@ -89,6 +93,7 @@ while True:
     print("\n🔁 Checking for new issues...")
 
     issues = get_issues()
+    print(f"📦 Found {len(issues)} issues")
 
     for issue in issues:
         issue_number = issue["number"]
@@ -99,12 +104,13 @@ while True:
             print("⏭️ Skipping (already processed)")
             continue
 
+        # 🔥 FIX: handle None safely
         prompt = issue.get("body") or ""
 
         if not prompt.strip():
-            print("⚠️ Empty or None prompt, skipping")
+            print("⚠️ Empty or None prompt")
 
-            comment(issue, "⚠️ Empty prompt. Please provide input.")
+            comment(issue, "⚠️ Empty prompt. Please send something.")
             mark_done(issue)
             continue
 
@@ -124,10 +130,10 @@ while True:
             comment(issue, f"Error: {str(e)}")
             mark_done(issue)
 
-    # ⏱️ Stop before 6-hour limit
+    # ⏱️ stop before GitHub kills job
     if time.time() - start_time > 5.5 * 3600:
         print("⏹️ Stopping before timeout")
         break
 
-    print("😴 Sleeping for 30 seconds...\n")
+    print("💓 Worker alive... sleeping 30s\n")
     time.sleep(30)
