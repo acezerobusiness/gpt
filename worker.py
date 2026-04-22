@@ -20,64 +20,112 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 print("✅ Model ready. Worker started.\n")
 
+
+# 🧠 Generate response
 def generate(prompt):
+    print("🧠 Generating...")
+
     inputs = tokenizer(prompt, return_tensors="pt")
+
     outputs = model.generate(
         **inputs,
         max_new_tokens=80,
         temperature=0.7,
-        top_p=0.9
+        top_p=0.9,
+        max_length=None  # 🔥 removes warning
     )
+
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
+
+# 📥 Fetch issues
 def get_issues():
     url = f"https://api.github.com/repos/{REPO}/issues"
     r = requests.get(url, headers=HEADERS)
+
+    if r.status_code != 200:
+        print("❌ GitHub API error:", r.text)
+        return []
+
     return r.json()
 
+
+# 💬 Comment result
 def comment(issue, text):
-    requests.post(issue["comments_url"], headers=HEADERS, json={"body": text})
+    print(f"💬 Commenting on #{issue['number']}")
 
+    requests.post(
+        issue["comments_url"],
+        headers=HEADERS,
+        json={"body": text}
+    )
+
+
+# 🏷️ Mark issue as done (IMPORTANT)
 def mark_done(issue):
-    # add label so we don’t process again
-    url = issue["url"] + "/labels"
-    requests.post(url, headers=HEADERS, json={"labels": ["done"]})
+    print(f"🏷️ Marking #{issue['number']} as done")
 
+    url = issue["url"] + "/labels"
+
+    requests.post(
+        url,
+        headers=HEADERS,
+        json={"labels": ["done"]}
+    )
+
+
+# 🔍 Check if already processed
 def is_processed(issue):
     labels = [l["name"] for l in issue.get("labels", [])]
+    print(f"🔎 Issue #{issue['number']} labels:", labels)
+
     return "done" in labels
 
-# 🔁 MAIN LOOP
+
+# ⏱️ MAIN LOOP
 start_time = time.time()
 
 while True:
-    print("🔎 Checking for new requests...")
+    print("\n🔁 Checking for new issues...")
 
     issues = get_issues()
 
     for issue in issues:
-        if is_processed(issue):
-            continue
-
-        prompt = issue["body"]
         issue_number = issue["number"]
 
-        print(f"⚡ Processing issue #{issue_number}")
+        print(f"\n➡️ Checking issue #{issue_number}")
+
+        if is_processed(issue):
+            print("⏭️ Skipping (already processed)")
+            continue
+
+        prompt = issue.get("body", "")
+
+        if not prompt.strip():
+            print("⚠️ Empty prompt, skipping")
+            mark_done(issue)
+            continue
 
         try:
+            print(f"⚡ Processing issue #{issue_number}")
+
             response = generate(prompt)
 
             comment(issue, response)
             mark_done(issue)
 
-            print(f"✅ Done #{issue_number}")
+            print(f"✅ Completed #{issue_number}")
 
         except Exception as e:
-            comment(issue, f"Error: {str(e)}")
+            print("❌ Error:", str(e))
 
-    # ⏱️ stop after ~5.5 hours (safe margin)
+            comment(issue, f"Error: {str(e)}")
+            mark_done(issue)
+
+    # ⏱️ Stop before 6-hour limit
     if time.time() - start_time > 5.5 * 3600:
         print("⏹️ Stopping before timeout")
         break
 
-    time.sleep(30)  # 🔥 important (avoid rate limits)
+    print("😴 Sleeping for 30 seconds...\n")
+    time.sleep(30)
